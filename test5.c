@@ -135,8 +135,24 @@ int main (int argc, char* argv[]) {
         printf("CRC: %08x\n", crc);
     }
     else if (len < 16) {
-        // TODO
-        printf("Can't do CRC for data length %d\n", len);
+        uint64_t in128[2] = {0, 0};
+        memcpy(in128, data, len);
+        // shift so we start from the high byte
+        in128[1] = (in128[1] << 8 * (16 - len)) + (in128[0] >> 8 * len);
+        in128[0] = in128[0] << 8 * (16 - len);
+        printf("in128: %016lx %016lx\n", in128[0], in128[1]);
+        __m128i in64 = _mm_set_epi64x(0, in128[0]);
+        __m128i in_high = _mm_set_epi32(0, 0, 0, in128[1] & 0xffffffff);
+        __m128i in_low = _mm_set_epi32(0, 0, 0, in128[1] >> 32);
+        __m128i a = reduce128(in64);
+        // first 32 bits go on in_high
+        in_high = _mm_xor_si128(in_high, _mm_and_si128(a, _mm_set_epi64x(0, 0xffffffff)));
+        // next 64 bits go on in_low
+        in_low = _mm_xor_si128(in_low, _mm_srli_si128(a, 4));
+        // then do 64 from here
+        __m128i in = reduce64(in_high, in_low);
+        int crc = reduce32(in);
+        printf("CRC: %08x\n", crc);
     }
     else {
         printf("Can't do CRC for data length %d\n", len);
