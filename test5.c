@@ -1,8 +1,11 @@
 #include "x86intrin.h"
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdint.h>
 
-int main (int argc, char* argv[]) {
-    char data[] = "ABCDEFGHIJKLMNOPabcdefghijklmnop";
+
+void fold256() {
     __m128i a, b;
     long long unsigned int out;
 
@@ -46,5 +49,80 @@ int main (int argc, char* argv[]) {
     a = _mm_clmulepi64_si128(_mm_set_epi64x(0, 0x1DB710641), a, 0x00);
     printf("multiply by p %016llx%016llx\n", _mm_cvtsi128_si64(_mm_srli_si128(a, 8)), _mm_cvtsi128_si64(a));
     printf("CRC32: %08llx\n", _mm_cvtsi128_si64(_mm_srli_si128(a, 8)));
+}
+
+int reduce32(__m128i in) {
+    __m128i a, mu, p;
+    // multiply by mu
+    mu = _mm_set_epi64x(0, 0x1F7011641);
+    a = _mm_and_si128(in, _mm_set_epi64x(0, 0xffffffff));
+    a = _mm_clmulepi64_si128(a, mu, 0x00);
+    printf("multiply by mu %016llx%016llx\n", _mm_cvtsi128_si64(_mm_srli_si128(a, 8)), _mm_cvtsi128_si64(a));
+    a = _mm_and_si128(a, _mm_set_epi64x(0, 0xffffffff));
+    // multiply by p
+    p = _mm_set_epi64x(0, 0x1DB710641);
+    a = _mm_clmulepi64_si128(a, p, 0x00);
+    printf("multiply by p %016llx%016llx\n", _mm_cvtsi128_si64(_mm_srli_si128(a, 8)), _mm_cvtsi128_si64(a));
+    a = _mm_xor_si128(in, a);
+    printf("xor with input %016llx%016llx\n", _mm_cvtsi128_si64(_mm_srli_si128(a, 8)), _mm_cvtsi128_si64(a));
+    a = _mm_srli_si128(a, 4);
+    return _mm_cvtsi128_si32(a);
+}
+
+__m128i reduce64(__m128i in) {
+    // split up into 32-bit chunks
+    __m128i a;
+    __m128i in1 = _mm_and_si128(in, _mm_set_epi64x(0, 0xffffffff));
+    __m128i in2 = _mm_srli_si128(in, 4);
+    // multiply by 64-bit shift
+    __m128i shift64 = _mm_set_epi64x(0, 0x163cd6124);
+    a = _mm_clmulepi64_si128(shift64, in1, 0x00);
+    a = _mm_xor_si128(a, in2);
+    return a;
+}
+
+__m128i reduce128(__m128i in) {
+    // TODO
+}
+
+int main (int argc, char* argv[]) {
+    if(argc < 2) {
+        printf("Usage: %s data\n", argv[0]);
+        return -1;
+    }
+
+    void* data = (void*) argv[1];
+    int len = strlen(data);
+
+    // saves us a reduce operation but not worth the extra branch
+    /*if(len == 4) {
+        __m128i in = _mm_loadu_si32((__m128*)data);
+        int crc = reduce32(in);
+        printf("CRC: %08x\n", crc);
+    }
+    else */
+    if (len == 8) {
+        __m128i in = _mm_loadu_si64((__m128*)data);
+        in = reduce64(in);
+        int crc = reduce32(in);
+        printf("CRC: %08x\n", crc);
+    }
+    else if (len < 8) {
+        uint64_t in64 = 0;
+        memcpy(&in64, data, len);
+        // shift so we start from the high byte
+        in64 = in64 << 8 * (8 - len);
+        __m128i in = _mm_set_epi64x(0, in64);
+        in = reduce64(in);
+        int crc = reduce32(in);
+        printf("CRC: %08x\n", crc);
+    }
+    else if (len < 16) {
+        // TODO
+    }
+    else {
+        printf("Can't do CRC for data length %d\n", len);
+    }
+
     return 0;
 }
