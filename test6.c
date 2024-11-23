@@ -85,7 +85,7 @@ int main (int argc, char* argv[]) {
         char in256[32] = {0};
 
         // read in at an offset so we get the shift for free
-        memcpy(in256 + (32 - len), data, len);
+        memcpy(in256 + (32 - bytes_remaining), data, bytes_remaining);
         __m128i in1 = _mm_loadu_si128((void*)in256);
         __m128i in2 = _mm_loadu_si128((void*)in256 + 16);
         printf("in1 %016llx%016llx\n", _mm_cvtsi128_si64(_mm_srli_si128(in1, 8)), _mm_cvtsi128_si64(in1));
