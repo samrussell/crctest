@@ -12,7 +12,7 @@ int main (int argc, char* argv[]) {
 
     // algorithm is
     // data * quotient
-    a = _mm_clmulepi64_si128(_mm_set_epi64x(0, 0xB4E5B025F7011641), _mm_set_epi64x(0, 0x1a2a3a4a5a6a7a8a), 0);
+    a = _mm_clmulepi64_si128(_mm_set_epi64x(0, 0xB4E5B025F7011641), _mm_set_epi64x(0, 0x4443424144434241), 0);
     out = _mm_cvtsi128_si64(a);
     out_high = _mm_cvtsi128_si64(_mm_srli_si128(a, 8));
     printf("first part %016llx%016llx\n", out_high, out);

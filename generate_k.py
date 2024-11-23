@@ -1,12 +1,18 @@
+def calc_next_k(last_k):
+    if last_k & 1:
+        output = 0xedb88320 ^ (last_k >> 1)
+    else:
+        output = last_k >> 1
+    
+    return output
+
+
 def calc_k(t):
     endt = t - 31
     output = 1
 
     while endt > 0:
-        if output & 1:
-            output = 0xedb88320 ^ (output >> 1)
-        else:
-            output = output >> 1
+        output = calc_next_k(output)
         endt -= 1
 
     return output
@@ -24,20 +30,17 @@ def test_pairs(num):
 if __name__ == '__main__':
     import argparse
 
-    #parser = argparse.ArgumentParser()
-    #parser.add_argument('t', type=int)
-    #args = parser.parse_args()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('t', type=int)
+    args = parser.parse_args()
 
-    lowest_bits = 32
-    for i in range(4096 * 8 * 128):
-        k = calc_k(i + 32)
+    k = calc_k(args.t)
+    k_binary_reversed = "{0:0=32b}".format(k)[::-1]
+    k_reversed = int(k_binary_reversed, 2)
 
-        #if k.bit_count() < lowest_bits and not (i % 32):
-        if test_pairs(k) and k.bit_count() < lowest_bits:
-            #for j in range(16):
-            #    if not ((0xffffffff ^ (0xffff << j)) & k):
-            lowest_bits = k.bit_count()
-            print("t: %d" % i)
-            print("Output: %08X" % k)
-            print("Binary: {0:0=32b}".format(k))
-            print("Num bits: %d" % k.bit_count())
+    print("t: %d" % args.t)
+    print("Output: %08X" % k)
+    print("Binary: {0:0=32b}".format(k))
+    print("Output (reversed): %08X" % k_reversed)
+    print("Binary (reversed): %s" % k_binary_reversed)
+    print("Num bits: %d" % k.bit_count())
