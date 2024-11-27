@@ -45,51 +45,74 @@ int main (int argc, char* argv[]) {
         return -1;
     }
 
+    int crc = 0;
     void* data = (void*) argv[1];
     int len = strlen(data);
-    int bytes_remaining = len;
+    size_t bytes_remaining = len;
     __m128i a;
+    __m128i xor_crc;
+    __m128i in1 = {0};
+    __m128i in2 = {0};
+    __m128i in3 = {0};
+    __m128i in4 = {0};
+    __m128i in5 = {0};
+    __m128i in6 = {0};
+    __m128i in7 = {0};
+    __m128i in8 = {0};
+    __m128i final_buf[8] = {0};
 
     __m128i shift544_shift480 = _mm_set_epi64x(0x1D9513D7, 0x8F352D95);
 
-    while (bytes_remaining >= 128) {
+    if (bytes_remaining >= 128)
+      {
         // fold by 4x128-bits
-        __m128i in1 = _mm_loadu_si128(data);
-        __m128i in2 = _mm_loadu_si128(data + (16 * 1));
-        __m128i in3 = _mm_loadu_si128(data + (16 * 2));
-        __m128i in4 = _mm_loadu_si128(data + (16 * 3));
-        __m128i in5 = _mm_loadu_si128(data + (16 * 4));
-        __m128i in6 = _mm_loadu_si128(data + (16 * 5));
-        __m128i in7 = _mm_loadu_si128(data + (16 * 6));
-        __m128i in8 = _mm_loadu_si128(data + (16 * 7));
+        in1 = _mm_loadu_si128(data);
+        in2 = _mm_loadu_si128(data + (16 * 1));
+        in3 = _mm_loadu_si128(data + (16 * 2));
+        in4 = _mm_loadu_si128(data + (16 * 3));
 
-        // now we fold in1 onto in2
-        __m128i fold_high1 = _mm_clmulepi64_si128(in1, shift544_shift480, 0x11);
-        __m128i fold_low1 = _mm_clmulepi64_si128(in1, shift544_shift480, 0x00);
-        in5 = _mm_xor_si128(in5, fold_high1);
-        in5 = _mm_xor_si128(in5, fold_low1);
-        __m128i fold_high2 = _mm_clmulepi64_si128(in2, shift544_shift480, 0x11);
-        __m128i fold_low2 = _mm_clmulepi64_si128(in2, shift544_shift480, 0x00);
-        in6 = _mm_xor_si128(in6, fold_high2);
-        in6 = _mm_xor_si128(in6, fold_low2);
-        __m128i fold_high3 = _mm_clmulepi64_si128(in3, shift544_shift480, 0x11);
-        __m128i fold_low3 = _mm_clmulepi64_si128(in3, shift544_shift480, 0x00);
-        in7 = _mm_xor_si128(in7, fold_high3);
-        in7 = _mm_xor_si128(in7, fold_low3);
-        __m128i fold_high4 = _mm_clmulepi64_si128(in4, shift544_shift480, 0x11);
-        __m128i fold_low4 = _mm_clmulepi64_si128(in4, shift544_shift480, 0x00);
-        in8 = _mm_xor_si128(in8, fold_high4);
-        in8 = _mm_xor_si128(in8, fold_low4);
+        /* Initialise with incoming CRC */
+        xor_crc = _mm_set_epi32 (0, 0, 0, crc);
+        in1 = _mm_xor_si128 (in1, xor_crc);
 
-        // TODO: make this stay in memory so we don't need to keep reading/writing
+        while (bytes_remaining >= 128) {
+            in5 = _mm_loadu_si128(data + (16 * 4));
+            in6 = _mm_loadu_si128(data + (16 * 5));
+            in7 = _mm_loadu_si128(data + (16 * 6));
+            in8 = _mm_loadu_si128(data + (16 * 7));
 
-        _mm_storeu_si128(data + (16 * 4), in5);
-        _mm_storeu_si128(data + (16 * 5), in6);
-        _mm_storeu_si128(data + (16 * 6), in7);
-        _mm_storeu_si128(data + (16 * 7), in8);
-        bytes_remaining -= 64;
-        data += 64;
-    }
+            // now we fold in1 onto in2
+            __m128i fold_high1 = _mm_clmulepi64_si128(in1, shift544_shift480, 0x11);
+            __m128i fold_low1 = _mm_clmulepi64_si128(in1, shift544_shift480, 0x00);
+            in1 = _mm_xor_si128(in5, fold_high1);
+            in1 = _mm_xor_si128(in1, fold_low1);
+            __m128i fold_high2 = _mm_clmulepi64_si128(in2, shift544_shift480, 0x11);
+            __m128i fold_low2 = _mm_clmulepi64_si128(in2, shift544_shift480, 0x00);
+            in2 = _mm_xor_si128(in6, fold_high2);
+            in2 = _mm_xor_si128(in2, fold_low2);
+            __m128i fold_high3 = _mm_clmulepi64_si128(in3, shift544_shift480, 0x11);
+            __m128i fold_low3 = _mm_clmulepi64_si128(in3, shift544_shift480, 0x00);
+            in3 = _mm_xor_si128(in7, fold_high3);
+            in3 = _mm_xor_si128(in3, fold_low3);
+            __m128i fold_high4 = _mm_clmulepi64_si128(in4, shift544_shift480, 0x11);
+            __m128i fold_low4 = _mm_clmulepi64_si128(in4, shift544_shift480, 0x00);
+            in4 = _mm_xor_si128(in8, fold_high4);
+            in4 = _mm_xor_si128(in4, fold_low4);
+
+            bytes_remaining -= 64;
+            data += 64;
+        }
+        
+        _mm_storeu_si128(final_buf, in1);
+        _mm_storeu_si128(final_buf + 1, in2);
+        _mm_storeu_si128(final_buf + 2, in3);
+        _mm_storeu_si128(final_buf + 3, in4);
+      }
+    
+    /* move everything to final_buf because it is RW */
+
+    memcpy(final_buf + 4, data + 64, bytes_remaining - 64);
+    data = final_buf;
 
     __m128i shift160_shift96 = _mm_set_epi64x(0xCCAA009E, 0xAE689191);
 
@@ -105,8 +128,6 @@ int main (int argc, char* argv[]) {
         __m128i fold_low = _mm_clmulepi64_si128(in1, shift160_shift96, 0x00);
         in2 = _mm_xor_si128(in2, fold_high);
         in2 = _mm_xor_si128(in2, fold_low);
-
-        // TODO: make this stay in memory so we don't need to keep reading/writing
 
         _mm_storeu_si128(data + 16, in2);
         bytes_remaining -= 16;
@@ -159,8 +180,8 @@ int main (int argc, char* argv[]) {
     // next 64 bits go on in_low
     in_low = _mm_xor_si128(in_low, _mm_srli_si128(a, 4));
     // then do 64 from here
-    __m128i in = reduce64(in_high, in_low);
-    int crc = reduce32(in);
+    a = reduce64(in_high, in_low);
+    crc = reduce32(a);
     printf("CRC: %08x\n", crc);
 
 
